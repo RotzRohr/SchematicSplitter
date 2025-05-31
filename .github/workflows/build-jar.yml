@@ -1,0 +1,40 @@
+name: Schematic Splitter Build and Release
+
+on:
+  push:
+    branches:
+      - "**"
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 with caching
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          check-latest: true
+          cache: 'maven'  # Enable caching for Maven dependencies
+
+      - name: Build with Maven
+        run: |
+          mvn -T 8 clean package -am -DskipTests -Dmaven.test.skip=true -Dmaven.javadoc.skip=true
+
+      - name: Create GitHub Release and Upload JAR
+        run: |
+          gh auth login --with-token <<< "${{ secrets.GH_PAT }}"
+          DATE=$(date +%Y%m%d%H%M%S) # Get the current date and time
+          YEAR=${DATE:0:4}
+          MONTH=${DATE:4:2}
+          DAY=${DATE:6:2}
+          TAG_NAME="$SchematicSplitter-v${DATE}"
+          gh release create ${TAG_NAME} \
+          target/SchematicSplitter-1.jar \
+          --title "Automated Release Day:${DAY} Month:${MONTH} Year:${YEAR}" \
+          --repo ${{ github.repository }} \
+          --notes "Automated release on ${YEAR}-${MONTH}-${DAY}"
