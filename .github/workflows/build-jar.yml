@@ -32,7 +32,7 @@ jobs:
           YEAR=${DATE:0:4}
           MONTH=${DATE:4:2}
           DAY=${DATE:6:2}
-          TAG_NAME="$SchematicSplitter-v${DATE}"
+          TAG_NAME="$SchematicSplitter-${DATE}"
           gh release create ${TAG_NAME} \
           target/SchematicSplitter-1.jar \
           --title "Automated Release Day:${DAY} Month:${MONTH} Year:${YEAR}" \
