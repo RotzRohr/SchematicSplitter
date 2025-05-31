@@ -208,10 +208,8 @@ public class SchematicSplitCommand implements CommandExecutor, TabCompleter {
         instructions.append("## Manual Pasting Instructions\n\n");
         instructions.append("Execute these commands in order:\n\n");
         instructions.append("```\n");
-        
-        instructions.append("# Starting position\n");
-        instructions.append("/tp ").append(startX).append(" ").append(startY).append(" ").append(startZ).append("\n\n");
-        
+        instructions.append("/gamemode spectator").append("\n\n");
+
         int index = 0;
         for (int x = 0; x < xChunks; x++) {
             for (int y = 0; y < yChunks; y++) {
