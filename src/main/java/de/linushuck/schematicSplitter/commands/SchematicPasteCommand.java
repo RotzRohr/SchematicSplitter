@@ -193,9 +193,13 @@ public class SchematicPasteCommand implements CommandExecutor, TabCompleter {
                         Location pasteLoc = startLoc.clone();
                         pasteLoc.add(x * chunkWidth, 0, y * chunkLength);
                         
-                        // Create edit session
+                        // Get the player's WorldEdit session to track history
+                        com.sk89q.worldedit.bukkit.BukkitPlayer wePlayer = BukkitAdapter.adapt(player);
+                        com.sk89q.worldedit.LocalSession session = WorldEdit.getInstance().getSessionManager().get(wePlayer);
+                        
+                        // Create edit session with the player's history
                         BukkitWorld world = new BukkitWorld(pasteLoc.getWorld());
-                        EditSession editSession = WorldEdit.getInstance().newEditSession(world);
+                        EditSession editSession = session.createEditSession(wePlayer);
                         
                         // Paste the clipboard
                         ClipboardHolder holder = new ClipboardHolder(clipboard);
@@ -205,6 +209,8 @@ public class SchematicPasteCommand implements CommandExecutor, TabCompleter {
                             .ignoreAirBlocks(false)
                             .build());
                         
+                        // Remember the edit session for undo
+                        session.remember(editSession);
                         editSession.close();
                         
                         if (announce) {
