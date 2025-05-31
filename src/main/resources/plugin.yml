@@ -1,0 +1,22 @@
+name: SchematicSplitter
+version: '1'
+main: de.linushuck.schematicSplitter.SchematicSplitter
+api-version: '1.21'
+softdepend: [FastAsyncWorldEdit, WorldEdit]
+commands:
+  schematicsplitter:
+    description: Manage schematic splits
+    usage: |
+      /schematicsplitter split <name> <x-chunks> <y-chunks>
+      /schematicsplitter paste <name>
+    permission: schematicsplitter.use
+permissions:
+  schematicsplitter.use:
+    description: Allows using schematicsplitter commands
+    default: op
+  schematicsplitter.split:
+    description: Allows splitting schematics
+    default: op
+  schematicsplitter.paste:
+    description: Allows automatic pasting of split schematics
+    default: op

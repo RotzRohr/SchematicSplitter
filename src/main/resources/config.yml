@@ -1,0 +1,13 @@
+# SchematicSplitter Configuration
+
+# Delay between pasting chunks (in ticks, 20 ticks = 1 second)
+paste-delay: 20
+
+# Whether to announce each chunk paste in chat
+announce-chunks: true
+
+# Maximum chunks to paste per operation (safety limit)
+max-chunks: 100
+
+# Whether to create a backup before splitting
+create-backup: false
