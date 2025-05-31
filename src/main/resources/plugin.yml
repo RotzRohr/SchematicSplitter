@@ -2,6 +2,8 @@ name: SchematicSplitter
 version: '1'
 main: de.linushuck.schematicSplitter.SchematicSplitter
 api-version: '1.21'
+authors:
+  - Linus Huck
 softdepend: [FastAsyncWorldEdit, WorldEdit]
 commands:
   schematicsplitter:

@@ -1,6 +1,7 @@
 package de.linushuck.schematicSplitter.commands;
 
 import de.linushuck.schematicSplitter.SchematicSplitter;
+import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -12,13 +13,11 @@ import java.util.Arrays;
 import java.util.List;
 
 public class SchematicSplitterCommand implements CommandExecutor, TabCompleter {
-    
-    private final SchematicSplitter plugin;
+
     private final SchematicSplitCommand splitCommand;
     private final SchematicPasteCommand pasteCommand;
     
     public SchematicSplitterCommand(SchematicSplitter plugin) {
-        this.plugin = plugin;
         this.splitCommand = new SchematicSplitCommand(plugin);
         this.pasteCommand = new SchematicPasteCommand(plugin);
     }
@@ -55,7 +54,6 @@ public class SchematicSplitterCommand implements CommandExecutor, TabCompleter {
                 return pasteCommand.onCommand(sender, command, label, args);
                 
             case "nexttile":
-            case "next":
                 if (!player.hasPermission("schematicsplitter.paste")) {
                     player.sendMessage("You don't have permission to paste schematics!");
                     return true;
@@ -73,6 +71,8 @@ public class SchematicSplitterCommand implements CommandExecutor, TabCompleter {
         player.sendMessage("/schematicsplitter split <name> <x-chunks> <y-chunks> - Split a schematic");
         player.sendMessage("/schematicsplitter paste <name> - Paste a split schematic");
         player.sendMessage("/schematicsplitter nexttile - Paste the next chunk (manual mode)");
+        player.sendMessage("More information can be found in the plugin documentation.");
+        player.sendMessage(MiniMessage.miniMessage().deserialize("<click:open_url:'https://github.com/RotzRohr/SchematicSplitter/blob/main/SimpleREADME.md'><hover:show_text:'Documentation'>Click me to go to the Documentation</hover></click>"));
     }
     
     @Override
