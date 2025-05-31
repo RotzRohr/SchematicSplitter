@@ -38,12 +38,14 @@ public class SchematicSplitCommand implements CommandExecutor, TabCompleter {
         }
         
         if (args.length < 3) {
-            player.sendMessage("Usage: /schematic split <filename> <x-chunks> <y-chunks>");
+            player.sendMessage("Usage: /schematic split <filename> <x-chunks> <y-chunks> [x] [y] [z]");
+            player.sendMessage("Optional: Provide starting coordinates for manual pasting instructions");
             return true;
         }
         
         final String fileName = args[0];
         final int xChunks, yChunks;
+        int startX = 0, startY = 100, startZ = 0;
         
         try {
             xChunks = Integer.parseInt(args[1]);
@@ -53,8 +55,15 @@ public class SchematicSplitCommand implements CommandExecutor, TabCompleter {
                 player.sendMessage("Chunk counts must be at least 1!");
                 return true;
             }
+            
+            // Parse optional starting coordinates
+            if (args.length >= 6) {
+                startX = Integer.parseInt(args[3]);
+                startY = Integer.parseInt(args[4]);
+                startZ = Integer.parseInt(args[5]);
+            }
         } catch (NumberFormatException e) {
-            player.sendMessage("Invalid chunk counts! Please use numbers.");
+            player.sendMessage("Invalid numbers! Please use integers for chunk counts and coordinates.");
             return true;
         }
         
@@ -70,12 +79,18 @@ public class SchematicSplitCommand implements CommandExecutor, TabCompleter {
         }
         
         final File finalSchematicFile = schematicFile;
+        final int finalStartX = startX;
+        final int finalStartY = startY;
+        final int finalStartZ = startZ;
         
         player.sendMessage("Starting to split schematic: " + fileName + " into " + xChunks + "x" + yChunks + " chunks...");
+        if (args.length >= 6) {
+            player.sendMessage("Using start position: " + startX + ", " + startY + ", " + startZ);
+        }
         
         plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
-                splitSchematic(finalSchematicFile, fileName, xChunks, yChunks);
+                splitSchematic(finalSchematicFile, fileName, xChunks, yChunks, finalStartX, finalStartY, finalStartZ);
                 plugin.getServer().getScheduler().runTask(plugin, () -> 
                     player.sendMessage("Successfully split schematic into " + (xChunks * yChunks) + " parts!")
                 );
@@ -91,7 +106,7 @@ public class SchematicSplitCommand implements CommandExecutor, TabCompleter {
         return true;
     }
     
-    private void splitSchematic(File schematicFile, String baseName, int xChunks, int yChunks) throws Exception {
+    private void splitSchematic(File schematicFile, String baseName, int xChunks, int yChunks, int startX, int startY, int startZ) throws Exception {
         Clipboard clipboard;
         com.sk89q.worldedit.extent.clipboard.io.ClipboardFormat format;
         
@@ -121,27 +136,27 @@ public class SchematicSplitCommand implements CommandExecutor, TabCompleter {
         
         for (int x = 0; x < xChunks; x++) {
             for (int y = 0; y < yChunks; y++) {
-                int startX = min.x() + (x * chunkWidth);
-                int startZ = min.z() + (y * chunkLength);
-                int endX = Math.min(startX + chunkWidth - 1, max.x());
-                int endZ = Math.min(startZ + chunkLength - 1, max.z());
+                int chunkStartX = min.x() + (x * chunkWidth);
+                int chunkStartZ = min.z() + (y * chunkLength);
+                int chunkEndX = Math.min(chunkStartX + chunkWidth - 1, max.x());
+                int chunkEndZ = Math.min(chunkStartZ + chunkLength - 1, max.z());
                 
-                BlockVector3 chunkMin = BlockVector3.at(startX, min.y(), startZ);
-                BlockVector3 chunkMax = BlockVector3.at(endX, max.y(), endZ);
+                BlockVector3 chunkMin = BlockVector3.at(chunkStartX, min.y(), chunkStartZ);
+                BlockVector3 chunkMax = BlockVector3.at(chunkEndX, max.y(), chunkEndZ);
                 
                 CuboidRegion region = new CuboidRegion(chunkMin, chunkMax);
                 
                 // Create a new clipboard for this chunk
                 com.sk89q.worldedit.extent.clipboard.BlockArrayClipboard chunkClipboard = 
                     new com.sk89q.worldedit.extent.clipboard.BlockArrayClipboard(
-                        new CuboidRegion(BlockVector3.ZERO, BlockVector3.at(endX - startX, height - 1, endZ - startZ))
+                        new CuboidRegion(BlockVector3.ZERO, BlockVector3.at(chunkEndX - chunkStartX, height - 1, chunkEndZ - chunkStartZ))
                     );
                 
                 // Copy blocks from the original clipboard to the chunk clipboard
-                for (int rx = 0; rx <= endX - startX; rx++) {
+                for (int rx = 0; rx <= chunkEndX - chunkStartX; rx++) {
                     for (int ry = 0; ry < height; ry++) {
-                        for (int rz = 0; rz <= endZ - startZ; rz++) {
-                            BlockVector3 sourcePos = BlockVector3.at(startX + rx, min.y() + ry, startZ + rz);
+                        for (int rz = 0; rz <= chunkEndZ - chunkStartZ; rz++) {
+                            BlockVector3 sourcePos = BlockVector3.at(chunkStartX + rx, min.y() + ry, chunkStartZ + rz);
                             if (clipboard.getRegion().contains(sourcePos)) {
                                 BaseBlock block = clipboard.getFullBlock(sourcePos);
                                 BlockVector3 targetPos = BlockVector3.at(rx, ry, rz);
@@ -170,14 +185,15 @@ public class SchematicSplitCommand implements CommandExecutor, TabCompleter {
             }
         }
         
-        generateInstructions(outputDir, baseName, xChunks, yChunks, chunkWidth, chunkLength, splitFiles);
+        generateInstructions(outputDir, baseName, xChunks, yChunks, chunkWidth, chunkLength, splitFiles, startX, startY, startZ);
         
         // Save metadata for proper pasting
         saveMetadata(outputDir, baseName, xChunks, yChunks, chunkWidth, chunkLength);
     }
     
     private void generateInstructions(File outputDir, String baseName, int xChunks, int yChunks, 
-                                    int chunkWidth, int chunkLength, List<String> splitFiles) throws Exception {
+                                    int chunkWidth, int chunkLength, List<String> splitFiles, 
+                                    int startX, int startY, int startZ) throws Exception {
         File instructionsFile = new File(outputDir, "instructions.md");
         StringBuilder instructions = new StringBuilder();
         
@@ -190,16 +206,11 @@ public class SchematicSplitCommand implements CommandExecutor, TabCompleter {
         instructions.append("- **Chunk Size:** ~").append(chunkWidth).append("x").append(chunkLength).append(" blocks\n\n");
         
         instructions.append("## Manual Pasting Instructions\n\n");
-        instructions.append("Execute these commands in order. Adjust the base coordinates (0 100 0) to your desired starting position:\n\n");
+        instructions.append("Execute these commands in order:\n\n");
         instructions.append("```\n");
         
-        // Assume starting position
-        int baseX = 0;
-        int baseY = 100;
-        int baseZ = 0;
-        
         instructions.append("# Starting position\n");
-        instructions.append("/tp ").append(baseX).append(" ").append(baseY).append(" ").append(baseZ).append("\n\n");
+        instructions.append("/tp ").append(startX).append(" ").append(startY).append(" ").append(startZ).append("\n\n");
         
         int index = 0;
         for (int x = 0; x < xChunks; x++) {
@@ -208,8 +219,8 @@ public class SchematicSplitCommand implements CommandExecutor, TabCompleter {
                 int zOffset = y * chunkLength;
                 
                 instructions.append("# Chunk ").append(x).append(",").append(y).append("\n");
-                instructions.append("/tp ").append(baseX + xOffset).append(" ").append(baseY).append(" ")
-                           .append(baseZ + zOffset).append("\n");
+                instructions.append("/tp ").append(startX + xOffset).append(" ").append(startY).append(" ")
+                           .append(startZ + zOffset).append("\n");
                 instructions.append("//schem load ").append(splitFiles.get(index)).append("\n");
                 instructions.append("//paste -a\n");
                 instructions.append("\n");
