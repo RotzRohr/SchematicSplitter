@@ -23,13 +23,41 @@ import java.io.FileInputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 
 public class SchematicPasteCommand implements CommandExecutor, TabCompleter {
     
     private final SchematicSplitter plugin;
+    private final Map<UUID, PasteSession> pasteSessions = new HashMap<>();
     
     public SchematicPasteCommand(SchematicSplitter plugin) {
         this.plugin = plugin;
+    }
+    
+    // Inner class to track paste sessions
+    private static class PasteSession {
+        File[] files;
+        Location startLocation;
+        int currentIndex;
+        int chunkWidth;
+        int chunkLength;
+        int xChunks;
+        int yChunks;
+        boolean announceChunks;
+        
+        PasteSession(File[] files, Location startLocation, int chunkWidth, int chunkLength, 
+                    int xChunks, int yChunks, boolean announceChunks) {
+            this.files = files;
+            this.startLocation = startLocation;
+            this.currentIndex = 0;
+            this.chunkWidth = chunkWidth;
+            this.chunkLength = chunkLength;
+            this.xChunks = xChunks;
+            this.yChunks = yChunks;
+            this.announceChunks = announceChunks;
+        }
     }
     
     @Override
@@ -80,7 +108,15 @@ public class SchematicPasteCommand implements CommandExecutor, TabCompleter {
         });
         
         Location startLocation = player.getLocation();
-        int pasteDelay = plugin.getConfig().getInt("paste-delay", 20);
+        
+        // Determine delay based on WorldEdit type
+        int pasteDelay;
+        if (plugin.hasFAWE()) {
+            pasteDelay = plugin.getConfig().getInt("paste-delay-fawe", 40);
+        } else {
+            pasteDelay = plugin.getConfig().getInt("paste-delay-worldedit", -1);
+        }
+        
         boolean announceChunks = plugin.getConfig().getBoolean("announce-chunks", true);
         int maxChunks = plugin.getConfig().getInt("max-chunks", 100);
         
@@ -147,9 +183,19 @@ public class SchematicPasteCommand implements CommandExecutor, TabCompleter {
                 maxY = Math.max(maxY, y);
             }
             
-            // Start pasting chunks
-            pasteChunksAsync(player, splitFiles, startLocation, chunkWidth, chunkLength, 
-                           pasteDelay, announceChunks, 0, maxX + 1, maxY + 1);
+            // Check if manual mode
+            if (pasteDelay == -1) {
+                // Store session for manual pasting
+                PasteSession session = new PasteSession(splitFiles, startLocation, chunkWidth, 
+                                                       chunkLength, maxX + 1, maxY + 1, announceChunks);
+                pasteSessions.put(player.getUniqueId(), session);
+                player.sendMessage("Manual paste mode enabled. Use /schematicsplitter nexttile to paste each chunk.");
+                player.sendMessage("You have " + splitFiles.length + " chunks to paste.");
+            } else {
+                // Start automatic pasting
+                pasteChunksAsync(player, splitFiles, startLocation, chunkWidth, chunkLength, 
+                               pasteDelay, announceChunks, 0, maxX + 1, maxY + 1);
+            }
             
         } catch (Exception e) {
             player.sendMessage("Failed to read chunk dimensions: " + e.getMessage());
@@ -264,5 +310,92 @@ public class SchematicPasteCommand implements CommandExecutor, TabCompleter {
         }
         
         return completions;
+    }
+    
+    public boolean pasteNextChunk(Player player) {
+        PasteSession session = pasteSessions.get(player.getUniqueId());
+        if (session == null) {
+            player.sendMessage("You don't have an active paste session!");
+            player.sendMessage("Start one with /schematicsplitter paste <name>");
+            return true;
+        }
+        
+        if (session.currentIndex >= session.files.length) {
+            player.sendMessage("All chunks have been pasted!");
+            pasteSessions.remove(player.getUniqueId());
+            return true;
+        }
+        
+        File currentFile = session.files[session.currentIndex];
+        String name = currentFile.getName().replace(".schem", "");
+        String[] parts = name.split("_");
+        int x = Integer.parseInt(parts[parts.length - 2]);
+        int y = Integer.parseInt(parts[parts.length - 1]);
+        
+        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                Clipboard clipboard;
+                try (FileInputStream fis = new FileInputStream(currentFile)) {
+                    ClipboardReader reader = ClipboardFormats.findByFile(currentFile).getReader(fis);
+                    clipboard = reader.read();
+                }
+                
+                plugin.getServer().getScheduler().runTask(plugin, () -> {
+                    try {
+                        // Calculate paste location
+                        Location pasteLoc = session.startLocation.clone();
+                        pasteLoc.add(x * session.chunkWidth, 0, y * session.chunkLength);
+                        
+                        // Get the player's WorldEdit session to track history
+                        com.sk89q.worldedit.bukkit.BukkitPlayer wePlayer = BukkitAdapter.adapt(player);
+                        com.sk89q.worldedit.LocalSession weSession = WorldEdit.getInstance().getSessionManager().get(wePlayer);
+                        
+                        // Create edit session with the player's history
+                        BukkitWorld world = new BukkitWorld(pasteLoc.getWorld());
+                        EditSession editSession = weSession.createEditSession(wePlayer);
+                        
+                        // Paste the clipboard
+                        ClipboardHolder holder = new ClipboardHolder(clipboard);
+                        Operations.complete(holder
+                            .createPaste(editSession)
+                            .to(BlockVector3.at(pasteLoc.getBlockX(), pasteLoc.getBlockY(), pasteLoc.getBlockZ()))
+                            .ignoreAirBlocks(false)
+                            .build());
+                        
+                        // Remember the edit session for undo
+                        weSession.remember(editSession);
+                        editSession.close();
+                        
+                        session.currentIndex++;
+                        int remaining = session.files.length - session.currentIndex;
+                        
+                        if (session.announceChunks) {
+                            player.sendMessage("Pasted chunk " + session.currentIndex + "/" + session.files.length + 
+                                             " at position (" + x + "," + y + ")");
+                        }
+                        
+                        if (remaining > 0) {
+                            player.sendMessage("Chunks remaining: " + remaining + ". Use /schematicsplitter nexttile to continue.");
+                        } else {
+                            player.sendMessage("All chunks pasted successfully!");
+                            pasteSessions.remove(player.getUniqueId());
+                        }
+                        
+                    } catch (Exception e) {
+                        player.sendMessage("Failed to paste chunk: " + e.getMessage());
+                        plugin.getLogger().severe("Error pasting chunk: " + e.getMessage());
+                        e.printStackTrace();
+                    }
+                });
+            } catch (Exception e) {
+                plugin.getServer().getScheduler().runTask(plugin, () -> {
+                    player.sendMessage("Failed to load chunk: " + e.getMessage());
+                    plugin.getLogger().severe("Error loading chunk: " + e.getMessage());
+                    e.printStackTrace();
+                });
+            }
+        });
+        
+        return true;
     }
 }

@@ -1,13 +1,16 @@
 # SchematicSplitter Configuration
 
-# Delay between pasting chunks (in ticks, 20 ticks = 1 second)
-paste-delay: 20
+# Delay between pasting chunks when using FastAsyncWorldEdit (in server ticks, 20 ticks = 1 second)
+# FAWE can handle faster pasting due to its async nature
+paste-delay-fawe: 40
+
+# Delay between pasting chunks when using regular WorldEdit (in server ticks, 20 ticks = 1 second)
+# Set to -1 for manual mode where players must use /schematicsplitter nexttile to paste each chunk
+# This is recommended for servers with limited resources or when pasting very large chunks
+paste-delay-worldedit: -1
 
 # Whether to announce each chunk paste in chat
 announce-chunks: true
 
 # Maximum chunks to paste per operation (safety limit)
 max-chunks: 100
-
-# Whether to create a backup before splitting
-create-backup: false

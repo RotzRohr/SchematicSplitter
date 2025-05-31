@@ -54,6 +54,14 @@ public class SchematicSplitterCommand implements CommandExecutor, TabCompleter {
                 // Remove the "paste" argument since SchematicPasteCommand expects it
                 return pasteCommand.onCommand(sender, command, label, args);
                 
+            case "nexttile":
+            case "next":
+                if (!player.hasPermission("schematicsplitter.paste")) {
+                    player.sendMessage("You don't have permission to paste schematics!");
+                    return true;
+                }
+                return pasteCommand.pasteNextChunk(player);
+                
             default:
                 showHelp(player);
                 return true;
@@ -64,6 +72,7 @@ public class SchematicSplitterCommand implements CommandExecutor, TabCompleter {
         player.sendMessage("SchematicSplitter Commands:");
         player.sendMessage("/schematicsplitter split <name> <x-chunks> <y-chunks> - Split a schematic");
         player.sendMessage("/schematicsplitter paste <name> - Paste a split schematic");
+        player.sendMessage("/schematicsplitter nexttile - Paste the next chunk (manual mode)");
     }
     
     @Override
@@ -76,6 +85,9 @@ public class SchematicSplitterCommand implements CommandExecutor, TabCompleter {
             }
             if ("paste".startsWith(args[0].toLowerCase())) {
                 completions.add("paste");
+            }
+            if ("nexttile".startsWith(args[0].toLowerCase())) {
+                completions.add("nexttile");
             }
         } else if (args.length > 1) {
             String subCommand = args[0].toLowerCase();
